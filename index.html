@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PetFeeder — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
+  <!-- Chart.js para gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- jsPDF para exportação PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- SheetJS para exportação Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- ===== MODAL: SELEÇÃO DE CACHORRO ===== -->
+  <div class="modal-overlay" id="modal-dog" role="dialog" aria-modal="true" aria-labelledby="modal-dog-title" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="modal-dog-title">Selecionar cachorro</h2>
+        <button class="modal-close" id="modal-dog-close" aria-label="Fechar"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">Escolha qual pet monitorar agora:</p>
+        <ul class="dog-list" id="dog-list" aria-label="Lista de cachorros"></ul>
+        <button class="btn btn--dashed btn--full" id="btn-add-dog">
+          <i class="ph ph-plus-circle"></i> Adicionar novo cachorro
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: ADICIONAR CACHORRO ===== -->
+  <div class="modal-overlay" id="modal-add-dog" role="dialog" aria-modal="true" aria-labelledby="modal-add-dog-title" hidden>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="modal-add-dog-title">Novo cachorro</h2>
+        <button class="modal-close" id="modal-add-dog-close" aria-label="Fechar"><i class="ph ph-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="new-dog-name" class="form-label"><i class="ph ph-dog"></i> Nome <span class="required">*</span></label>
+          <input type="text" id="new-dog-name" class="form-input" placeholder="Ex: Rex" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="new-dog-weight" class="form-label">Peso (kg)</label>
+            <input type="number" id="new-dog-weight" class="form-input" placeholder="Ex: 6" min="0.5" max="100" step="0.1" />
+          </div>
+          <div class="form-group">
+            <label for="new-dog-age" class="form-label">Idade (anos)</label>
+            <input type="number" id="new-dog-age" class="form-input" placeholder="Ex: 2" min="0" max="25" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cor do avatar</label>
+          <div class="avatar-color-picker" role="group" id="add-dog-colors">
+            <button class="avatar-color active" data-color="#2f80ed" style="background:#2f80ed" aria-pressed="true"></button>
+            <button class="avatar-color" data-color="#27ae60" style="background:#27ae60" aria-pressed="false"></button>
+            <button class="avatar-color" data-color="#f2994a" style="background:#f2994a" aria-pressed="false"></button>
+            <button class="avatar-color" data-color="#eb5757" style="background:#eb5757" aria-pressed="false"></button>
+            <button class="avatar-color" data-color="#9b51e0" style="background:#9b51e0" aria-pressed="false"></button>
+            <button class="avatar-color" data-color="#f2c94c" style="background:#f2c94c" aria-pressed="false"></button>
+          </div>
+        </div>
+        <button class="btn btn--primary btn--full" id="btn-save-new-dog">
+          <i class="ph ph-check-circle"></i> Salvar cachorro
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOP NAV (desktop) ===== -->
+  <header class="top-nav" role="banner">
+    <div class="top-nav__brand">
+      <span class="brand-icon">🐾</span>
+      <span class="brand-name">PetFeeder</span>
+      <span class="brand-badge">BETA</span>
+    </div>
+
+    <nav class="top-nav__links" role="navigation" aria-label="Menu principal">
+      <button class="nav-btn active" data-page="dashboard"><i class="ph ph-house"></i> Home</button>
+      <button class="nav-btn" data-page="manual"><i class="ph ph-bowl-food"></i> Alimentar</button>
+      <button class="nav-btn" data-page="schedule"><i class="ph ph-clock"></i> Horários</button>
+      <button class="nav-btn" data-page="history"><i class="ph ph-list-bullets"></i> Histórico</button>
+      <button class="nav-btn" data-page="data"><i class="ph ph-chart-bar"></i> Dados</button>
+    </nav>
+
+    <div class="top-nav__right">
+      <div class="connection-status" id="connection-status" title="Status da conexão com ESP32">
+        <span class="status-dot connecting" id="status-dot"></span>
+        <span id="status-label">Conectando...</span>
+      </div>
+
+      <button class="dog-chip" id="dog-chip-btn" aria-label="Selecionar cachorro" aria-haspopup="dialog">
+        <span class="dog-chip__avatar" id="nav-dog-avatar">🐕</span>
+        <span class="dog-chip__name" id="nav-dog-name">Selecionar</span>
+        <i class="ph ph-caret-down"></i>
+      </button>
+
+      <button class="user-chip" id="btn-logout" aria-label="Sair da conta">
+        <span class="user-chip__name" id="nav-user-name">Usuário</span>
+        <i class="ph ph-sign-out"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content" id="main-content" role="main">
+
+    <!-- ========== DASHBOARD ========== -->
+    <section class="page active" id="page-dashboard" aria-label="Dashboard">
+      <div class="page-header">
+        <div>
+          <h1 id="dash-greeting">Olá! 👋</h1>
+          <p class="subtitle" id="dash-subtitle">Acompanhe a alimentação do seu pet</p>
+        </div>
+        <button class="dog-pill" id="dash-dog-pill" aria-label="Trocar cachorro" aria-haspopup="dialog">
+          <span class="dog-pill__dot" id="dash-dog-dot"></span>
+          <span id="dash-dog-name">Nenhum selecionado</span>
+          <i class="ph ph-swap"></i>
+        </button>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card card--accent">
+          <div class="card__icon"><i class="ph ph-clock-countdown"></i></div>
+          <div class="card__body">
+            <span class="card__label">Próxima alimentação</span>
+            <span class="card__value" id="next-feed-time">--:--</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__icon"><i class="ph ph-check-circle"></i></div>
+          <div class="card__body">
+            <span class="card__label">Última alimentação</span>
+            <span class="card__value" id="last-feed-time">--:--</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__icon"><i class="ph ph-scales"></i></div>
+          <div class="card__body">
+            <span class="card__label">Ração no pote</span>
+            <span class="card__value" id="food-grams">-- g</span>
+          </div>
+          <div class="level-bar">
+            <div class="level-bar__fill" id="food-level-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__icon"><i class="ph ph-info"></i></div>
+          <div class="card__body">
+            <span class="card__label">Status</span>
+            <span class="card__value status-text" id="feeder-status">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráfico gauge do reservatório -->
+      <div class="card card--chart">
+        <div class="card-chart-header">
+          <div>
+            <h2 class="section-title">Nível do reservatório</h2>
+            <p class="hint-text">Atualiza ao liberar ração ou ao clicar em "Atualizar"</p>
+          </div>
+          <button class="btn btn--ghost-sm" id="btn-refresh-chart" aria-label="Atualizar gráfico">
+            <i class="ph ph-arrows-clockwise"></i> Atualizar
+          </button>
+        </div>
+        <div class="gauge-wrap">
+          <canvas id="gauge-chart" width="220" height="220" aria-label="Gráfico de nível do pote"></canvas>
+          <div class="gauge-label">
+            <span id="gauge-pct">0%</span>
+            <small>do reservatório</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Liberação rápida -->
+      <div class="quick-feed-area">
+        <button class="btn btn--primary btn--large" id="btn-quick-feed">
+          <i class="ph ph-bowl-food"></i> Liberar ração agora
+        </button>
+        <p class="hint-text">Libera 50g (padrão)</p>
+      </div>
+
+      <!-- Alertas -->
+      <div class="alerts-section" aria-live="polite">
+        <h2 class="section-title">Alertas</h2>
+        <div id="alerts-list"></div>
+      </div>
+    </section>
+
+    <!-- ========== ALIMENTAR ========== -->
+    <section class="page" id="page-manual" hidden>
+      <div class="page-header">
+        <h1>Alimentar agora</h1>
+        <p class="subtitle">Controle manual da liberação de ração</p>
+      </div>
+
+      <div class="card card--form">
+        <h2 class="form-title">Selecione a quantidade</h2>
+        <div class="quantity-selector" role="group" aria-label="Quantidade">
+          <button class="qty-btn" data-qty="20" aria-pressed="false">20g</button>
+          <button class="qty-btn active" data-qty="50" aria-pressed="true">50g</button>
+          <button class="qty-btn" data-qty="80" aria-pressed="false">80g</button>
+          <button class="qty-btn" data-qty="100" aria-pressed="false">100g</button>
+        </div>
+
+        <div class="custom-qty-area">
+          <label for="custom-qty" class="form-label">Ou quantidade personalizada (g):</label>
+          <div class="input-row">
+            <input type="number" id="custom-qty" class="form-input" min="5" max="300" placeholder="Ex: 35" />
+            <span class="input-suffix">g</span>
+          </div>
+          <small class="hint-text">Mín: 5g — Máx: 300g</small>
+        </div>
+
+        <div class="selected-qty-display">
+          Selecionado: <strong id="selected-qty-display">50g</strong>
+        </div>
+
+        <button class="btn btn--primary btn--large" id="btn-manual-feed">
+          <i class="ph ph-bowl-food"></i> Liberar ração
+        </button>
+      </div>
+
+      <div class="action-feedback" id="manual-feedback" hidden>
+        <div class="feedback-icon">✅</div>
+        <p id="feedback-message"></p>
+      </div>
+    </section>
+
+    <!-- ========== HORÁRIOS ========== -->
+    <section class="page" id="page-schedule" hidden>
+      <div class="page-header">
+        <h1>Horários</h1>
+        <p class="subtitle">Programação automática de alimentação</p>
+      </div>
+
+      <div class="card card--form">
+        <h2 class="form-title">Adicionar horário</h2>
+        <div class="form-group">
+          <label for="sched-time" class="form-label">Horário</label>
+          <input type="time" id="sched-time" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label for="sched-qty" class="form-label">Quantidade (g)</label>
+          <div class="input-row">
+            <input type="number" id="sched-qty" class="form-input" min="5" max="300" placeholder="Ex: 50" />
+            <span class="input-suffix">g</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dias da semana</label>
+          <div class="days-selector" role="group">
+            <button class="day-btn active" data-day="dom" aria-pressed="true">Dom</button>
+            <button class="day-btn active" data-day="seg" aria-pressed="true">Seg</button>
+            <button class="day-btn active" data-day="ter" aria-pressed="true">Ter</button>
+            <button class="day-btn active" data-day="qua" aria-pressed="true">Qua</button>
+            <button class="day-btn active" data-day="qui" aria-pressed="true">Qui</button>
+            <button class="day-btn active" data-day="sex" aria-pressed="true">Sex</button>
+            <button class="day-btn active" data-day="sab" aria-pressed="true">Sáb</button>
+          </div>
+        </div>
+        <button class="btn btn--primary" id="btn-add-schedule">
+          <i class="ph ph-plus-circle"></i> Salvar horário
+        </button>
+      </div>
+
+      <div class="schedule-list-section">
+        <h2 class="section-title">Horários cadastrados</h2>
+        <ul class="schedule-list" id="schedule-list"></ul>
+        <p class="empty-state" id="schedule-empty" hidden>Nenhum horário cadastrado.</p>
+      </div>
+    </section>
+
+    <!-- ========== HISTÓRICO ========== -->
+    <section class="page" id="page-history" hidden>
+      <div class="page-header">
+        <h1>Histórico</h1>
+        <p class="subtitle">Registro de alimentações do pet selecionado</p>
+      </div>
+
+      <div class="filter-bar" role="group">
+        <button class="filter-btn active" data-filter="all">Todos</button>
+        <button class="filter-btn" data-filter="consumed">Consumido</button>
+        <button class="filter-btn" data-filter="not-consumed">Não consumido</button>
+      </div>
+
+      <div class="history-table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Horário</th>
+              <th>Qtd.</th>
+              <th>Tipo</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-value" id="stat-total">0</span>
+          <span class="stat-label">Total refeições</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-consumed">0</span>
+          <span class="stat-label">Consumidas</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="stat-grams">0g</span>
+          <span class="stat-label">Total liberado</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== DADOS (TCC) ========== -->
+    <section class="page" id="page-data" hidden>
+      <div class="page-header">
+        <div>
+          <h1>Dados <span class="tcc-badge">TCC</span></h1>
+          <p class="subtitle">Relatório técnico para apresentação acadêmica</p>
+        </div>
+        <div class="export-btns">
+          <button class="btn btn--export" id="btn-export-excel">
+            <i class="ph ph-table"></i> Excel
+          </button>
+          <button class="btn btn--export btn--export-pdf" id="btn-export-pdf">
+            <i class="ph ph-file-pdf"></i> PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(47,128,237,.12);color:#2f80ed"><i class="ph ph-chart-line-up"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Média diária</span>
+            <span class="kpi-value" id="kpi-avg-daily">—</span>
+            <span class="kpi-unit">g/dia</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(39,174,96,.12);color:#27ae60"><i class="ph ph-scales"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Total consumido</span>
+            <span class="kpi-value" id="kpi-total">—</span>
+            <span class="kpi-unit">g no período</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(242,153,74,.12);color:#f2994a"><i class="ph ph-timer"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Tempo médio para comer</span>
+            <span class="kpi-value" id="kpi-avg-time">—</span>
+            <span class="kpi-unit">minutos</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:rgba(235,87,87,.12);color:#eb5757"><i class="ph ph-x-circle"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Taxa de rejeição</span>
+            <span class="kpi-value" id="kpi-rejection">—</span>
+            <span class="kpi-unit">% não consumido</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráfico de consumo diário -->
+      <div class="card">
+        <h2 class="section-title">Consumo diário de ração — últimos 7 dias</h2>
+        <div class="chart-container">
+          <canvas id="consumption-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Gráfico de horários -->
+      <div class="card">
+        <h2 class="section-title">Distribuição por horário do dia</h2>
+        <div class="chart-container chart-container--sm">
+          <canvas id="schedule-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabela detalhada -->
+      <div class="card">
+        <h2 class="section-title">Dados brutos — últimas refeições</h2>
+        <div class="history-table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Horário</th>
+                <th>Qtd. (g)</th>
+                <th>Consumido</th>
+                <th>Tempo (min)</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody id="data-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="data-note">
+        <i class="ph ph-info"></i>
+        Dados simulados para fins acadêmicos. Integração com ESP32 substituirá por leituras reais do sensor de peso.
+      </p>
+    </section>
+
+  </main>
+
+  <!-- ===== BOTTOM NAV (mobile) ===== -->
+  <nav class="bottom-nav" role="navigation" aria-label="Menu mobile">
+    <button class="bottom-nav__btn active" data-page="dashboard" aria-current="page">
+      <i class="ph ph-house"></i><span>Home</span>
+    </button>
+    <button class="bottom-nav__btn" data-page="manual">
+      <i class="ph ph-bowl-food"></i><span>Alimentar</span>
+    </button>
+    <button class="bottom-nav__btn" data-page="schedule">
+      <i class="ph ph-clock"></i><span>Horários</span>
+    </button>
+    <button class="bottom-nav__btn" data-page="history">
+      <i class="ph ph-list-bullets"></i><span>Histórico</span>
+    </button>
+    <button class="bottom-nav__btn" data-page="data">
+      <i class="ph ph-chart-bar"></i><span>Dados</span>
+    </button>
+  </nav>
+
+  <script src="script.js"></script>
+</body>
+</html>
